@@ -4,38 +4,81 @@
   <meta charset="UTF-8">
   <title>Image to PDF with Text</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #preview { display: flex; flex-wrap: wrap; gap: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #f9fafb;
+    }
+    h2 {
+      text-align: center;
+      margin-bottom: 20px;
+      color: #333;
+    }
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    input[type="file"] {
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+    }
+    button {
+      padding: 8px 16px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1e40af;
+    }
+    #preview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
     .canvas-container {
       position: relative;
-      border: 1px solid #ccc;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 10px;
       padding: 10px;
-      max-width: 100%; /* Responsive */
-      overflow: hidden;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
     }
-    canvas {
-      max-width: 100%; /* Resize canvas on mobile */
-      height: auto;
-      display: block;
+    .draggable {
+      position: absolute;
+      cursor: move;
+    }
+    .image-wrapper {
+      top: 0;
+      left: 0;
     }
     .text-label {
-      position: absolute;
-      top: 20px; left: 20px;
       color: red;
       font-size: 18px;
-      cursor: move;
+      font-weight: bold;
     }
     .text-input {
       margin-top: 8px;
       width: 100%;
+      padding: 6px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
     }
   </style>
 </head>
 <body>
 
-  <h2>Upload Images → Add Text → Download PDF</h2>
-  <input type="file" id="images" multiple accept="image/*">
-  <button id="download">Download PDF</button>
+  <h2>📄 Upload → Move → Download PDF</h2>
+
+  <div class="controls">
+    <input type="file" id="images" multiple accept="image/*">
+    <button id="download">Download PDF</button>
+  </div>
   
   <div id="preview"></div>
 
@@ -46,6 +89,27 @@
 
     document.getElementById("images").addEventListener("change", handleFiles);
 
+    function makeDraggable(el, container) {
+      let isDragging = false, offsetX = 0, offsetY = 0;
+
+      el.addEventListener("mousedown", e => {
+        isDragging = true;
+        offsetX = e.offsetX;
+        offsetY = e.offsetY;
+      });
+
+      document.addEventListener("mousemove", e => {
+        if (isDragging) {
+          let x = e.pageX - container.offsetLeft - offsetX;
+          let y = e.pageY - container.offsetTop - offsetY;
+          el.style.left = x + "px";
+          el.style.top = y + "px";
+        }
+      });
+
+      document.addEventListener("mouseup", () => isDragging = false);
+    }
+
     function handleFiles(event) {
       const files = event.target.files;
       const preview = document.getElementById("preview");
@@ -55,57 +119,58 @@
         reader.onload = e => {
           const img = new Image();
           img.onload = () => {
-            // scale down if image is huge (mobile fix)
-            const maxWidth = 400;
-            const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+            const scale = img.width > 400 ? 400 / img.width : 1;
             const displayWidth = img.width * scale;
             const displayHeight = img.height * scale;
 
-            const canvas = document.createElement("canvas");
-            const ctx = canvas.getContext("2d");
-            canvas.width = displayWidth;
-            canvas.height = displayHeight;
-            ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
-
+            // container
             const container = document.createElement("div");
             container.className = "canvas-container";
             container.style.width = displayWidth + "px";
+            container.style.height = displayHeight + 50 + "px";
 
+            // image wrapper
+            const imgCanvas = document.createElement("canvas");
+            imgCanvas.width = displayWidth;
+            imgCanvas.height = displayHeight;
+            const ctx = imgCanvas.getContext("2d");
+            ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+            const imgWrapper = document.createElement("div");
+            imgWrapper.className = "draggable image-wrapper";
+            imgWrapper.style.width = displayWidth + "px";
+            imgWrapper.style.height = displayHeight + "px";
+            imgWrapper.style.left = "0px";
+            imgWrapper.style.top = "0px";
+            imgWrapper.appendChild(imgCanvas);
+
+            // text label
             const textDiv = document.createElement("div");
-            textDiv.className = "text-label";
+            textDiv.className = "draggable text-label";
+            textDiv.style.left = "20px";
+            textDiv.style.top = "20px";
             textDiv.textContent = "Your Text";
 
-            // text input for each image
+            // text input
             const input = document.createElement("input");
             input.type = "text";
             input.className = "text-input";
-            input.placeholder = "Enter text for this image...";
             input.value = "Your Text";
             input.addEventListener("input", () => {
               textDiv.textContent = input.value;
             });
 
-            // Dragging text
-            let offsetX, offsetY, isDragging = false;
-            textDiv.addEventListener("mousedown", e => {
-              isDragging = true;
-              offsetX = e.offsetX;
-              offsetY = e.offsetY;
-            });
-            document.addEventListener("mousemove", e => {
-              if (isDragging) {
-                textDiv.style.left = (e.pageX - container.offsetLeft - offsetX) + "px";
-                textDiv.style.top = (e.pageY - container.offsetTop - offsetY) + "px";
-              }
-            });
-            document.addEventListener("mouseup", () => isDragging = false);
+            // draggable setup
+            makeDraggable(imgWrapper, container);
+            makeDraggable(textDiv, container);
 
-            container.appendChild(canvas);
+            // append
+            container.appendChild(imgWrapper);
             container.appendChild(textDiv);
             container.appendChild(input);
             preview.appendChild(container);
 
-            items.push({ canvas, textDiv, input, img, displayWidth, displayHeight });
+            items.push({ img, imgCanvas, imgWrapper, textDiv, input, displayWidth, displayHeight });
           };
           img.src = e.target.result;
         };
@@ -117,26 +182,41 @@
       const pdf = new jsPDF();
 
       items.forEach((item, index) => {
-        const { canvas, textDiv, input, img, displayWidth, displayHeight } = item;
-        const ctx = canvas.getContext("2d");
+        const { img, imgCanvas, imgWrapper, textDiv, input, displayWidth, displayHeight } = item;
+        const ctx = imgCanvas.getContext("2d");
 
-        // redraw image clean
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, imgCanvas.width, imgCanvas.height);
         ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
 
-        // draw text
-        ctx.font = "20px Arial";
-        ctx.fillStyle = "red";
-        let x = parseInt(textDiv.style.left) || 50;
-        let y = parseInt(textDiv.style.top) || 50;
-        ctx.fillText(input.value, x, y);
+        const imgX = parseInt(imgWrapper.style.left) || 0;
+        const imgY = parseInt(imgWrapper.style.top) || 0;
+        const textX = parseInt(textDiv.style.left) || 50;
+        const textY = parseInt(textDiv.style.top) || 50;
 
-        const imgData = canvas.toDataURL("image/jpeg", 1.0);
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = displayWidth + Math.abs(imgX);
+        tempCanvas.height = displayHeight + Math.abs(imgY);
+        const tctx = tempCanvas.getContext("2d");
+        tctx.drawImage(img, imgX, imgY, displayWidth, displayHeight);
+        tctx.font = "20px Arial";
+        tctx.fillStyle = "red";
+        tctx.fillText(input.value, textX, textY);
+
+        const imgData = tempCanvas.toDataURL("image/jpeg", 1.0);
         if (index > 0) pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 10, 10, 190, 0); // fit to page width
+        pdf.addImage(imgData, "JPEG", 10, 10, 190, 0);
       });
 
-      pdf.save("images.pdf");
+      // ✅ iOS-friendly download
+      const blob = pdf.output("blob");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "images.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     });
   </script>
 </body>
