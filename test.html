@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Image to PDF with Text</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #preview { display: flex; flex-wrap: wrap; gap: 20px; }
+    .canvas-container {
+      position: relative;
+      border: 1px solid #ccc;
+      padding: 10px;
+      max-width: 100%; /* Responsive */
+      overflow: hidden;
+    }
+    canvas {
+      max-width: 100%; /* Resize canvas on mobile */
+      height: auto;
+      display: block;
+    }
+    .text-label {
+      position: absolute;
+      top: 20px; left: 20px;
+      color: red;
+      font-size: 18px;
+      cursor: move;
+    }
+    .text-input {
+      margin-top: 8px;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>Upload Images → Add Text → Download PDF</h2>
+  <input type="file" id="images" multiple accept="image/*">
+  <button id="download">Download PDF</button>
+  
+  <div id="preview"></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    const { jsPDF } = window.jspdf;
+    let items = [];
+
+    document.getElementById("images").addEventListener("change", handleFiles);
+
+    function handleFiles(event) {
+      const files = event.target.files;
+      const preview = document.getElementById("preview");
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            // scale down if image is huge (mobile fix)
+            const maxWidth = 400;
+            const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+            const displayWidth = img.width * scale;
+            const displayHeight = img.height * scale;
+
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            canvas.width = displayWidth;
+            canvas.height = displayHeight;
+            ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+            const container = document.createElement("div");
+            container.className = "canvas-container";
+            container.style.width = displayWidth + "px";
+
+            const textDiv = document.createElement("div");
+            textDiv.className = "text-label";
+            textDiv.textContent = "Your Text";
+
+            // text input for each image
+            const input = document.createElement("input");
+            input.type = "text";
+            input.className = "text-input";
+            input.placeholder = "Enter text for this image...";
+            input.value = "Your Text";
+            input.addEventListener("input", () => {
+              textDiv.textContent = input.value;
+            });
+
+            // Dragging text
+            let offsetX, offsetY, isDragging = false;
+            textDiv.addEventListener("mousedown", e => {
+              isDragging = true;
+              offsetX = e.offsetX;
+              offsetY = e.offsetY;
+            });
+            document.addEventListener("mousemove", e => {
+              if (isDragging) {
+                textDiv.style.left = (e.pageX - container.offsetLeft - offsetX) + "px";
+                textDiv.style.top = (e.pageY - container.offsetTop - offsetY) + "px";
+              }
+            });
+            document.addEventListener("mouseup", () => isDragging = false);
+
+            container.appendChild(canvas);
+            container.appendChild(textDiv);
+            container.appendChild(input);
+            preview.appendChild(container);
+
+            items.push({ canvas, textDiv, input, img, displayWidth, displayHeight });
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    document.getElementById("download").addEventListener("click", () => {
+      const pdf = new jsPDF();
+
+      items.forEach((item, index) => {
+        const { canvas, textDiv, input, img, displayWidth, displayHeight } = item;
+        const ctx = canvas.getContext("2d");
+
+        // redraw image clean
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, displayWidth, displayHeight);
+
+        // draw text
+        ctx.font = "20px Arial";
+        ctx.fillStyle = "red";
+        let x = parseInt(textDiv.style.left) || 50;
+        let y = parseInt(textDiv.style.top) || 50;
+        ctx.fillText(input.value, x, y);
+
+        const imgData = canvas.toDataURL("image/jpeg", 1.0);
+        if (index > 0) pdf.addPage();
+        pdf.addImage(imgData, "JPEG", 10, 10, 190, 0); // fit to page width
+      });
+
+      pdf.save("images.pdf");
+    });
+  </script>
+</body>
+</html>
